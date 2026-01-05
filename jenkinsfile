@@ -4,7 +4,7 @@ pipeline {
   environment {
     DOCKER_HUB_REPO = 'jithendragurram/bank'
     AWS_REGION = 'eu-west-2'
-    K8S_CLUSTER_NAME = 'Jithu-bank'
+    K8S_CLUSTER_NAME = 'Jithubank'
     IMAGE_TAG = "${BUILD_NUMBER}"
   }
 
@@ -22,34 +22,35 @@ pipeline {
       }
     }
 
-    stage('Push Image') {
+    stage('Push Image to DockerHub') {
       steps {
-        withDockerRegistry(credentialsId: 'docker') {
-          sh "docker push ${DOCKER_HUB_REPO}:${IMAGE_TAG}"
+        script {
+          withDockerRegistry(
+            credentialsId: 'docker',
+            url: 'https://index.docker.io/v1/'
+          ) {
+            sh "docker push ${DOCKER_HUB_REPO}:${IMAGE_TAG}"
+          }
         }
       }
     }
 
-    stage('Connect to Existing EKS') {
-      steps {
-        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws']]) {
-          sh """
-            aws eks update-kubeconfig \
-            --region ${AWS_REGION} \
-            --name ${K8S_CLUSTER_NAME}
-            kubectl get nodes
-          """
-        }
-      }
-    }
+stage('Deploy to EKS') {
+  steps {
+    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws']]) {
+      sh """
+        aws eks update-kubeconfig \
+          --region ${AWS_REGION} \
+          --name ${K8S_CLUSTER_NAME}
 
-    stage('Deploy to EKS') {
-      steps {
-        sh """
-          sed -i 's|IMAGE_TAG|${IMAGE_TAG}|g' k8s/deployment.yaml
-          kubectl apply -f k8s/
-        """
-      }
+        sed -i 's|IMAGE_TAG|${IMAGE_TAG}|g' k8/deployment.yaml
+        kubectl apply -f k8/
+        kubectl get pods
+      """
     }
   }
 }
+
+    }
+  }
+

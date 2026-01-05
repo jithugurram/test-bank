@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: Jithubank
+  name: jithubank
   labels:
-    app: Jithubank
+    app: jithubank
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: Jithubank
+      app: jithubank
   template:
     metadata:
       labels:
-        app: Jithubank
+        app: jithubank
     spec:
       containers:
-      - name: Jithubank
-        image: jithendragurram/Jithubank:latest
+      - name: jithubank
+        image: jithendragurram/bank:IMAGE_TAG
         ports:
         - containerPort: 3000
