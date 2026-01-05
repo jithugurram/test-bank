@@ -12,7 +12,7 @@ pipeline {
 
     stage('Checkout') {
       steps {
-        git 'https://github.com/gurrammuni/bank.git'
+        git 'https://github.com/jithugurram/bank.git'
       }
     }
 
