@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard - Jithu Bank</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Poppins', sans-serif;
+    background:#0c0f1d;
+    color:#fff;
+    display:flex;
+    flex-direction:column;
+    height:100vh;
+    overflow:hidden;
+  }
+  header {
+    background:rgba(0,0,0,0.9);
+    padding:15px 30px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    box-shadow:0 4px 10px rgba(0,0,0,0.5);
+    position:sticky;top:0;z-index:100;
+  }
+  header h1 { font-size:22px; color:#FFD700; }
+  nav { display:flex; align-items:center; gap:15px; }
+  nav a { color:#FFD700; text-decoration:none; font-weight:600; transition:color 0.3s; }
+  nav a:hover { color:#FF8C00; }
+
+  .notification { position:relative; cursor:pointer; }
+  .notification .count {
+    position:absolute; top:-8px; right:-8px;
+    background:#FF4500; color:#fff; border-radius:50%;
+    font-size:12px; padding:2px 5px;
+  }
+  .dropdown { display:none; position:absolute; right:0; background:#222; width:250px; border-radius:8px; overflow:hidden; box-shadow:0 4px 15px rgba(0,0,0,0.5); }
+  .dropdown.show { display:block; }
+  .dropdown div { padding:10px; border-bottom:1px solid rgba(255,255,255,0.1); }
+  .dropdown div:last-child { border-bottom:none; }
+
+  .logout-btn, .theme-toggle { padding:8px 14px; border:none; border-radius:8px; cursor:pointer; font-weight:bold; transition:0.3s; }
+  .logout-btn { background:#FF4500; color:#fff; }
+  .logout-btn:hover { background:#ff6347; }
+  .theme-toggle { background:#FFD700; color:#000; }
+  .theme-toggle:hover { background:#FF8C00; color:#fff; }
+
+  .dashboard-content { flex-grow:1; overflow-y:auto; padding:20px; display:grid; grid-template-columns: repeat(auto-fit, minmax(300px,1fr)); gap:20px; }
+  .dashboard-content::-webkit-scrollbar { width:8px; }
+  .dashboard-content::-webkit-scrollbar-thumb { background:#FFD700; border-radius:4px; }
+
+  .card { background:rgba(255,255,255,0.05); border-radius:12px; padding:15px; box-shadow:0 4px 10px rgba(0,0,0,0.3); }
+  .balance-card { background:linear-gradient(135deg,#FFD700,#FF8C00); color:#000; text-align:center; font-size:20px; font-weight:bold; }
+  .transaction-history table { width:100%; border-collapse:collapse; color:inherit; }
+  .transaction-history th, .transaction-history td { padding:10px; text-align:left; border-bottom:1px solid rgba(255,255,255,0.2); }
+  .progress-bar { background:#444; border-radius:8px; overflow:hidden; height:12px; margin-top:6px; }
+  .progress-fill { background:#FFD700; height:100%; width:0; transition:width 1s; }
+  input, select { padding:8px; margin:5px 0; border:none; border-radius:6px; width:100%; }
+  button { background:#FFD700; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-weight:bold; width:100%; margin-top:5px; }
+  h3 { margin-bottom:10px; color:#FFD700; }
+
+  footer { text-align:center; padding:12px; background:rgba(0,0,0,0.9); color:#aaa; grid-column:1/-1; }
+
+  /* Loan & Investment styling */
+  .loan-calculator, .currency-box, .investment-card, .quick-transfer, .security-center { text-align:center; }
+  .grid-full { grid-column:1/-1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🏦 Jithu Bank</h1>
+  <div style="display:flex;align-items:center;gap:15px;">
+    <nav>
+      <a href="{{ url_for('deposit') }}">Deposit</a>
+      <a href="{{ url_for('withdraw') }}">Withdraw</a>
+      <a href="{{ url_for('transfer') }}">Transfer</a>
+      <a href="{{ url_for('transactions') }}">Transactions</a>
+    </nav>
+
+    <div class="notification" onclick="toggleDropdown()">
+      🔔 <span class="count" id="notif-count">3</span>
+      <div class="dropdown" id="notif-dropdown">
+        <div>💸 Money received from John - ₹5,000</div>
+        <div>📢 Loan pre-approved at 7.2%</div>
+        <div>⚠️ PIN changed successfully</div>
+      </div>
+    </div>
+
+    <button class="theme-toggle" onclick="toggleTheme()">🌗 Theme</button>
+    <form action="{{ url_for('logout') }}" method="POST" style="display:inline;">
+      <button type="submit" class="logout-btn">Logout</button>
+    </form>
+  </div>
+</header>
+
+<div class="dashboard-content">
+
+  <!-- Balance & Rewards -->
+  <div class="card balance-card">Current Balance: ₹{{ "%.2f"|format(user.balance) }}</div>
+  <div class="card">
+    <h3>🏆 Rewards & Cashback</h3>
+    <p>You have <strong>1200</strong> points</p>
+    <div class="progress-bar"><div class="progress-fill" style="width:60%"></div></div>
+    <p>Next Reward at 2000 points</p>
+  </div>
+
+  <!-- Income vs Expense -->
+  <div class="card">
+    <h3>Income vs Expense</h3>
+    <canvas id="incomeExpenseChart"></canvas>
+  </div>
+
+  <!-- Net Worth Chart -->
+  <div class="card">
+    <h3>💼 Net Worth</h3>
+    <canvas id="netWorthChart"></canvas>
+  </div>
+
+  <!-- Quick Transfer -->
+  <div class="card quick-transfer">
+    <h3>💸 Quick Transfer</h3>
+    <input type="text" id="recipient" placeholder="Recipient Name/UPI">
+    <input type="number" id="quick-amount" placeholder="Amount">
+    <button onclick="quickTransfer()">Send</button>
+    <p id="transfer-status"></p>
+  </div>
+
+  <!-- Loan EMI Calculator -->
+  <div class="card loan-calculator">
+    <h3>🏦 Loan EMI Calculator</h3>
+    <input type="number" id="loan-amt" placeholder="Loan Amount">
+    <input type="number" id="loan-rate" placeholder="Interest Rate (%)">
+    <input type="number" id="loan-months" placeholder="Tenure (Months)">
+    <button onclick="calculateEMI()">Calculate EMI</button>
+    <p id="emi-result"></p>
+  </div>
+
+  <!-- Investment Tracker -->
+  <div class="card investment-card">
+    <h3>📈 Investments</h3>
+    <ul>
+      <li>FD: ₹50,000 | Matures: 12/2025 | ROI: 7%</li>
+      <li>RD: ₹5,000/month | Matures: 06/2026 | ROI: 6.5%</li>
+      <li>Mutual Fund: ₹20,000 | Current NAV: ₹210</li>
+    </ul>
+  </div>
+
+  <!-- Currency Converter -->
+  <div class="card currency-box">
+    <h3>🌍 Currency Converter</h3>
+    <input type="number" id="amount" placeholder="Enter amount">
+    <select id="currency">
+      <option value="USD">USD</option>
+      <option value="EUR">EUR</option>
+      <option value="GBP">GBP</option>
+    </select>
+    <button onclick="convertCurrency()">Convert</button>
+    <p id="conversion-result"></p>
+  </div>
+
+  <!-- Security Center -->
+  <div class="card security-center">
+    <h3>🔒 Security</h3>
+    <button onclick="alert('2FA Enabled')">Enable 2FA</button>
+    <button onclick="alert('PIN Changed')">Change PIN</button>
+    <button onclick="alert('Viewing login activity')">Login Activity</button>
+  </div>
+
+  <!-- Savings Goal Tracker -->
+<div class="card">
+  <h3>🎯 Savings Goal</h3>
+  <p>Goal: ₹1,00,000</p>
+  <p>Saved: ₹65,000</p>
+  <div class="progress-bar">
+    <div class="progress-fill" style="width:65%"></div>
+  </div>
+  <p>35% remaining</p>
+</div>
+
+<!-- Upcoming Bills -->
+<div class="card">
+  <h3>🧾 Upcoming Bills</h3>
+  <ul>
+    <li>⚡ Electricity Bill – ₹1,200 (Due: 10 Aug)</li>
+    <li>📶 Internet – ₹999 (Due: 14 Aug)</li>
+    <li>🎬 Netflix – ₹499 (Due: 18 Aug)</li>
+    <li>💳 Credit Card – ₹6,500 (Due: 25 Aug)</li>
+  </ul>
+</div>
+
+<!-- Spending by Category -->
+<div class="card">
+  <h3>📊 Spending by Category</h3>
+  <canvas id="categoryChart"></canvas>
+</div>
+
+<!-- Login Activity -->
+<div class="card">
+  <h3>🖥️ Recent Login Activity</h3>
+  <ul>
+    <li>Chrome · Windows · Hyderabad – Today 10:45 AM</li>
+    <li>Mobile App · Android · Hyderabad – Yesterday 8:30 PM</li>
+    <li>Chrome · Windows · Bengaluru – 02 Aug 2025</li>
+  </ul>
+</div>
+
+<!-- Customer Support -->
+<div class="card">
+  <h3>🎧 Customer Support</h3>
+  <button onclick="alert('Support ticket raised')">Raise Ticket</button>
+  <button onclick="alert('Connecting to live chat')">Live Chat</button>
+  <button onclick="alert('Statement downloaded')">Download Statement</button>
+</div>
+
+<!-- Bank Transfer (NEFT / RTGS / IMPS) -->
+<div class="card">
+  <h3>🏦 Bank Transfer</h3>
+
+  <label>Transfer Mode</label>
+  <select id="transfer-mode">
+    <option value="IMPS">IMPS (Instant)</option>
+    <option value="NEFT">NEFT</option>
+    <option value="RTGS">RTGS</option>
+  </select>
+
+  <input type="text" id="beneficiary" placeholder="Beneficiary Name">
+  <input type="text" id="account" placeholder="Account Number">
+  <input type="text" id="ifsc" placeholder="IFSC Code">
+  <input type="number" id="bt-amount" placeholder="Amount (₹)">
+
+  <button onclick="processTransfer()">Transfer Now</button>
+
+  <p id="transfer-msg"></p>
+</div>
+
+<!-- Transaction Receipt -->
+<div class="card">
+  <h3>📄 Transaction Receipt</h3>
+  <div id="receipt">
+    <p>No transaction yet</p>
+  </div>
+</div>
+
+<!-- NEFT / RTGS / IMPS History -->
+<div class="card grid-full">
+  <h3>📜 Fund Transfer History</h3>
+  <table width="100%">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Mode</th>
+        <th>Beneficiary</th>
+        <th>Amount</th>
+        <th>Status</th>
+        <th>Ref ID</th>
+      </tr>
+    </thead>
+    <tbody id="transfer-history"></tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h3>📄 Transaction Receipt</h3>
+  <div id="receipt">
+    <p>No transaction yet</p>
+  </div>
+
+  <button
+    id="download-pdf-btn"
+    onclick="downloadPDF()"
+    style="display:none; margin-top:10px;"
+  >
+    📥 Download PDF
+  </button>
+</div>
+
+</div>
+
+<footer>© 2025 Jithu Bank. All Rights Reserved.</footer>
+
+<script>
+  function toggleDropdown() { document.getElementById('notif-dropdown').classList.toggle('show'); }
+  function toggleTheme() { document.body.classList.toggle('light-mode'); }
+
+  function quickTransfer() {
+    const name = document.getElementById('recipient').value;
+    const amount = document.getElementById('transfer-amount').value;
+    document.getElementById('transfer-status').innerText = `₹${amount} sent to ${name} ✅`;
+  }
+
+  function calculateEMI() {
+    const P = document.getElementById('loan-amt').value;
+    const R = document.getElementById('loan-rate').value / 12 / 100;
+    const N = document.getElementById('loan-months').value;
+    const EMI = (P * R * Math.pow(1+R,N)) / (Math.pow(1+R,N)-1);
+    document.getElementById('emi-result').innerText = `EMI: ₹${EMI.toFixed(2)}`;
+  }
+
+  function convertCurrency() {
+    const amount = document.getElementById('amount').value;
+    const currency = document.getElementById('currency').value;
+    const rates = { USD:0.012, EUR:0.011, GBP:0.0095 };
+    const converted = (amount * rates[currency]).toFixed(2);
+    document.getElementById('conversion-result').innerText = `Converted: ${currency} ${converted}`;
+  }
+
+  const ctx = document.getElementById('incomeExpenseChart').getContext('2d');
+  new Chart(ctx, {
+    type:'line',
+    data:{
+      labels:['Jan','Feb','Mar','Apr','May','Jun'],
+      datasets:[
+        {label:'Income', data:[12000,15000,14000,16000,17000,18000], borderColor:'#00FF7F', fill:false, tension:0.3},
+        {label:'Expense', data:[8000,9000,9500,10000,11000,10500], borderColor:'#FF4500', fill:false, tension:0.3}
+      ]
+    }
+  });
+
+  const ctx2 = document.getElementById('netWorthChart').getContext('2d');
+  new Chart(ctx2, {
+    type:'doughnut',
+    data:{ labels:['Assets','Liabilities'], datasets:[{data:[500000,150000], backgroundColor:['#FFD700','#FF4500']}] }
+  });
+
+  const ctx3 = document.getElementById('categoryChart').getContext('2d');
+  new Chart(ctx3, {
+    type: 'pie',
+    data: {
+      labels: ['Food', 'Travel', 'Shopping', 'Bills'],
+      datasets: [{
+        data: [12000, 8000, 6000, 10000],
+        backgroundColor: ['#FFD700', '#FF8C00', '#FF4500', '#00FF7F']
+      }]
+    }
+  });
+
+  function processTransfer() {
+  const mode = document.getElementById('transfer-mode').value;
+  const name = document.getElementById('beneficiary').value.trim();
+  const acc = document.getElementById('account').value.trim();
+  const ifsc = document.getElementById('ifsc').value.trim();
+  const amount = Number(document.getElementById('bt-amount').value);
+  const msg = document.getElementById('transfer-msg');
+
+  if (!name || !acc || !ifsc || amount <= 0) {
+    msg.style.color = "red";
+    msg.innerText = "❌ Please fill all fields correctly";
+    return;
+  }
+
+  if (mode === "RTGS" && amount < 200000) {
+    msg.innerText = "❌ RTGS minimum amount is ₹2,00,000";
+    return;
+  }
+
+  if (mode === "IMPS" && amount > 200000) {
+    msg.innerText = "❌ IMPS limit is ₹2,00,000";
+    return;
+  }
+
+  const ref = "TXN" + Date.now();
+  const date = new Date().toLocaleString();
+
+  msg.style.color = "#00FF7F";
+  msg.innerText = "✅ Transfer Successful";
+
+  lastTransaction = {
+  mode,
+  name,
+  acc,
+  ifsc,
+  amount,
+  ref,
+  date
+};
+
+document.getElementById("download-pdf-btn").style.display = "block";
+
+  document.getElementById('receipt').innerHTML = `
+    <p><b>Mode:</b> ${mode}</p>
+    <p><b>Beneficiary:</b> ${name}</p>
+    <p><b>Amount:</b> ₹${amount}</p>
+    <p><b>Status:</b> SUCCESS</p>
+    <p><b>Ref ID:</b> ${ref}</p>
+    <p><b>Date:</b> ${date}</p>
+  `;
+
+  document.getElementById('transfer-history').innerHTML += `
+    <tr>
+      <td>${date}</td>
+      <td>${mode}</td>
+      <td>${name}</td>
+      <td>₹${amount}</td>
+      <td style="color:#00FF7F;">SUCCESS</td>
+      <td>${ref}</td>
+    </tr>
+  `;
+
+  document.getElementById('beneficiary').value = "";
+  document.getElementById('account').value = "";
+  document.getElementById('ifsc').value = "";
+  document.getElementById('bt-amount').value = "";
+}
+
+function downloadPDF() {
+  if (!lastTransaction) return;
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+
+  doc.setFontSize(18);
+  doc.text("Jithu Bank - Fund Transfer Receipt", 20, 20);
+
+  doc.setFontSize(12);
+  doc.text(`Date: ${lastTransaction.date}`, 20, 35);
+  doc.text(`Reference ID: ${lastTransaction.ref}`, 20, 45);
+
+  doc.line(20, 50, 190, 50);
+
+  doc.text(`Transfer Mode: ${lastTransaction.mode}`, 20, 65);
+  doc.text(`Beneficiary Name: ${lastTransaction.name}`, 20, 75);
+  doc.text(`Account Number: ${lastTransaction.acc}`, 20, 85);
+  doc.text(`IFSC Code: ${lastTransaction.ifsc}`, 20, 95);
+  doc.text(`Amount: ₹${lastTransaction.amount}`, 20, 105);
+  doc.text(`Status: SUCCESS`, 20, 115);
+
+  doc.line(20, 130, 190, 130);
+
+  doc.setFontSize(10);
+  doc.text(
+    "This is a system-generated receipt. No signature required.",
+    20,
+    145
+  );
+
+  doc.save(`JithuBank_Receipt_${lastTransaction.ref}.pdf`);
+}
+
+
+
+</script>
+</body>
+</html>
