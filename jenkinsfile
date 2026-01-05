@@ -1,72 +1,55 @@
 pipeline {
-    agent any
+  agent any
 
-    stages {
-        stage ("clean workspace") {
-            steps {
-                cleanWs()
-            }
-        }
-        stage ("Git Checkout") {
-            steps {
-                git 'https://github.com/gurrammuni/bank.git'
+  environment {
+    DOCKER_HUB_REPO = 'jithendragurram/bank'
+    AWS_REGION = 'eu-west-2'
+    K8S_CLUSTER_NAME = 'Jithu-bank'
+    IMAGE_TAG = "${BUILD_NUMBER}"
+  }
 
-               
-            }
-        }
-        
-        stage ("Build Docker Image") {
-            steps {
-                sh "docker build -t Jithubank ."
-            }
-        }
-        stage ("Tag & Push to DockerHub") {
-            steps {
-                script {
-                    withDockerRegistry(credentialsId: 'docker') {
-                        sh "docker tag Jithubank jithendragurram/bank:latest "
-                        sh "docker push jithendragurram/bank:latest "
-                    }
-                }
-            }
-        }
+  stages {
 
-        stage ("Deploy to Container") {
-            steps {
-                sh 'docker run -d --name bank -p 3000:3000 jithendragurram/bank:latest'
-            }
-        }
+    stage('Checkout') {
+      steps {
+        git 'https://github.com/gurrammuni/bank.git'
+      }
     }
 
-    stage('Deploy to K8s') {
+    stage('Build Image') {
       steps {
-        sh 'kubectl apply -f k8s/'
+        sh "docker build -t ${DOCKER_HUB_REPO}:${IMAGE_TAG} ."
+      }
+    }
+
+    stage('Push Image') {
+      steps {
+        withDockerRegistry(credentialsId: 'docker') {
+          sh "docker push ${DOCKER_HUB_REPO}:${IMAGE_TAG}"
+        }
+      }
+    }
+
+    stage('Connect to Existing EKS') {
+      steps {
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws']]) {
+          sh """
+            aws eks update-kubeconfig \
+            --region ${AWS_REGION} \
+            --name ${K8S_CLUSTER_NAME}
+            kubectl get nodes
+          """
+        }
+      }
+    }
+
+    stage('Deploy to EKS') {
+      steps {
+        sh """
+          sed -i 's|IMAGE_TAG|${IMAGE_TAG}|g' k8s/deployment.yaml
+          kubectl apply -f k8s/
+        """
       }
     }
   }
-}
-    post {
-    always {
-        emailext attachLog: true,
-            subject: "'${currentBuild.result}'",
-            body: """
-                <html>
-                <body>
-                    <div style="background-color: #FFA07A; padding: 10px; margin-bottom: 10px;">
-                        <p style="color: white; font-weight: bold;">Project: ${env.JOB_NAME}</p>
-                    </div>
-                    <div style="background-color: #90EE90; padding: 10px; margin-bottom: 10px;">
-                        <p style="color: white; font-weight: bold;">Build Number: ${env.BUILD_NUMBER}</p>
-                    </div>
-                    <div style="background-color: #87CEEB; padding: 10px; margin-bottom: 10px;">
-                        <p style="color: white; font-weight: bold;">URL: ${env.BUILD_URL}</p>
-                    </div>
-                </body>
-                </html>
-            """,
-            to: 'gmjithendra111@gmail.com',
-            mimeType: 'text/html',
-	 )
-        }
-    }
 }
