@@ -9,7 +9,7 @@ pipeline {
         }
         stage ("Git Checkout") {
             steps {
-                git 'https://github.com/gurrammuni/DevOps-Project-Zomato-Kastro.git'
+                git 'https://github.com/jithugurram/test-bank.git'
 
                
             }
